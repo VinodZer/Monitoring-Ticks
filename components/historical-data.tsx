@@ -1,8 +1,10 @@
 "use client"
 
+import { CardDescription } from "@/components/ui/card"
+
 import { useState, useMemo } from "react"
-import { Calendar, Filter, Search } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Calendar, Filter, Search, History } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -48,7 +50,10 @@ export function HistoricalData({ ticks }: HistoricalDataProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Historical Data Analysis</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <History className="h-5 w-5" />
+          Historical Data Analysis
+        </CardTitle>
         <CardDescription>Browse and analyze historical tick data with filtering options</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -2,8 +2,9 @@
 
 import { useMemo } from "react"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { TrendingUp } from "lucide-react"
 import type { TickData } from "@/hooks/use-tick-data"
 
 interface RealTimeChartProps {
@@ -43,8 +44,10 @@ export function RealTimeChart({ ticks }: RealTimeChartProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Real-Time Tick Data</CardTitle>
-        <CardDescription>Live visualization of tick prices, volume, and delays</CardDescription>
+        <CardTitle className="flex items-center gap-2">
+          <TrendingUp className="h-5 w-5" />
+          Real-time Chart
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className="h-[300px]">

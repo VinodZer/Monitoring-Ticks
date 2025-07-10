@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Download, FileText, Table } from "lucide-react"
+import { Download, FileText, Table, Database } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -201,7 +201,7 @@ export function ExportPanel({ ticks }: ExportPanelProps) {
                 </SelectItem>
                 <SelectItem value="json">
                   <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
+                    <Database className="w-4 h-4" />
                     JSON (JavaScript Object Notation)
                   </div>
                 </SelectItem>
@@ -308,40 +308,40 @@ export function ExportPanel({ ticks }: ExportPanelProps) {
         <CardContent className="space-y-3">
           <Button
             variant="outline"
-            className="w-full justify-start"
+            className="w-full justify-start bg-transparent"
             onClick={() => {
               setExportFormat("csv")
               setIncludeFields({ timestamp: true, last_price: true, delay: true, id: false, volume: true })
               handleExport()
             }}
           >
-            <Table className="w-4 h-4 mr-2" />
+            <FileText className="mr-2 h-4 w-4" />
             Export Performance Data (CSV)
           </Button>
 
           <Button
             variant="outline"
-            className="w-full justify-start"
+            className="w-full justify-start bg-transparent"
             onClick={() => {
               setExportFormat("json")
               setIncludeFields({ timestamp: true, last_price: true, delay: true, id: true, volume: true })
               handleExport()
             }}
           >
-            <FileText className="w-4 h-4 mr-2" />
+            <Database className="mr-2 h-4 w-4" />
             Export Complete Dataset (JSON)
           </Button>
 
           <Button
             variant="outline"
-            className="w-full justify-start"
+            className="w-full justify-start bg-transparent"
             onClick={() => {
               setExportFormat("pdf")
               setIncludeFields({ timestamp: true, last_price: true, delay: true, id: false, volume: true })
               handleExport()
             }}
           >
-            <FileText className="w-4 h-4 mr-2" />
+            <FileText className="mr-2 h-4 w-4" />
             Generate Summary Report (PDF)
           </Button>
         </CardContent>

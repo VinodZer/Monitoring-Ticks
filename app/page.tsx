@@ -14,9 +14,11 @@ import {
   GitCompare,
   Menu,
   X,
+  LogIn,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
 import { MarketDataGrid } from "@/components/market-data-grid"
 import { UpstoxMarketDataGrid } from "@/components/upstox-market-data-grid"
 import { DebugDashboard } from "@/components/debug-dashboard"
@@ -26,68 +28,73 @@ import { useTickData } from "@/hooks/use-tick-data"
 import { InactivityAlertsLog } from "@/components/inactivity-alerts-log"
 import { useUpstoxTickData } from "@/hooks/use-upstox-tick-data"
 import { useInactivityAlerts } from "@/hooks/use-inactivity-alerts"
+import { useAuth } from "@/contexts/auth-context"
+import { AuthModal } from "@/components/auth/auth-modal"
+import { UserMenu } from "@/components/auth/user-menu"
 
 export default function MarketDashboard() {
+  const { user, loading: authLoading, setIsAuthModalOpen, setAuthMode } = useAuth()
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+
   const {
-    ticks,
+    ticks = [],
     isConnected,
     isFrozen,
     lastTickTime,
     averageDelay,
     totalTicks,
     freezingIncidents,
-    alerts: systemAlerts, // Renamed to avoid conflict
+    alerts: systemAlerts = [],
     connectionStatus,
     clearAlerts,
-    rawMessages,
-    debugInfo,
+    rawMessages = [],
+    debugInfo = [],
     addTestTick,
   } = useTickData()
 
   const {
-    ticks: upstoxTicks,
+    ticks: upstoxTicks = [],
     isConnected: upstoxIsConnected,
     isFrozen: upstoxIsFrozen,
     lastTickTime: upstoxLastTickTime,
     averageDelay: upstoxAverageDelay,
     totalTicks: upstoxTotalTicks,
     freezingIncidents: upstoxFreezingIncidents,
-    alerts: upstoxSystemAlerts,
+    alerts: upstoxSystemAlerts = [],
     connectionStatus: upstoxConnectionStatus,
     clearAlerts: upstoxClearAlerts,
-    rawMessages: upstoxRawMessages,
-    debugInfo: upstoxDebugInfo,
+    rawMessages: upstoxRawMessages = [],
+    debugInfo: upstoxDebugInfo = [],
     addTestTick: upstoxAddTestTick,
   } = useUpstoxTickData()
 
   // ORIGINAL feed
   const {
-    alerts: inactivityAlerts,
-    inactiveSymbols,
-    configurations,
+    alerts: inactivityAlerts = [],
+    inactiveSymbols = new Set(),
+    configurations = new Map(),
     updateConfiguration,
     clearAllAlerts,
-  } = useInactivityAlerts(ticks)
+  } = useInactivityAlerts(ticks || [])
 
   // UPSTOX feed - need to create a compatible adapter for the hook
-  const upstoxTicksForAlerts = upstoxTicks.map((tick) => ({
+  const upstoxTicksForAlerts = (upstoxTicks || []).map((tick) => ({
     ...tick,
-    instrument_token: Number.parseInt(tick.instrument_token.replace(/[^0-9]/g, "")) || 0, // Convert string to number for compatibility
+    instrument_token: Number.parseInt(tick.instrument_token?.toString().replace(/[^0-9]/g, "") || "0") || 0,
   }))
 
   const {
-    alerts: upstoxInactivityAlerts,
-    inactiveSymbols: upstoxInactiveSymbols,
-    configurations: upstoxConfigurations,
+    alerts: upstoxInactivityAlerts = [],
+    inactiveSymbols: upstoxInactiveSymbols = new Set(),
+    configurations: upstoxConfigurations = new Map(),
     updateConfiguration: upstoxUpdateConfiguration,
     clearAllAlerts: upstoxClearAllAlerts,
   } = useInactivityAlerts(upstoxTicksForAlerts)
 
   const [selectedTab, setSelectedTab] = useState("kite")
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   // Get unique instruments from both feeds
-  const uniqueInstruments = ticks.reduce(
+  const uniqueInstruments = (ticks || []).reduce(
     (acc, tick) => {
       if (!acc.find((t) => t.instrument_token === tick.instrument_token)) {
         acc.push(tick)
@@ -97,7 +104,7 @@ export default function MarketDashboard() {
     [] as typeof ticks,
   )
 
-  const upstoxUniqueInstruments = upstoxTicks.reduce(
+  const upstoxUniqueInstruments = (upstoxTicks || []).reduce(
     (acc, tick) => {
       if (!acc.find((t) => t.instrument_token === tick.instrument_token)) {
         acc.push(tick)
@@ -110,6 +117,17 @@ export default function MarketDashboard() {
   const enabledAlertsCount = Array.from(configurations.values()).filter((c) => c.enabled).length
   const upstoxEnabledAlertsCount = Array.from(upstoxConfigurations.values()).filter((c) => c.enabled).length
   const totalEnabledAlerts = enabledAlertsCount + upstoxEnabledAlertsCount
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 px-2">
@@ -133,80 +151,125 @@ export default function MarketDashboard() {
 
             {/* Desktop Navigation - Hidden on mobile */}
             <div className="hidden lg:flex items-center gap-6">
-              {/* Inline Metrics */}
-              <div className="flex text-sm flex-row gap-x-4 items-center">
-                {/* Instruments */}
-                <div className="flex items-center gap-1 bg-sky-50 px-2.5 rounded-md py-0.5">
-                  <TrendingUp className="w-4 h-4 text-purple-600" />
-                  <span className="text-gray-600 font-mono">Instruments:</span>
-                  <span className="font-semibold text-gray-900 font-mono">
-                    {uniqueInstruments.length + upstoxUniqueInstruments.length}
-                  </span>
-                </div>
+              {user && (
+                <>
+                  {/* Inline Metrics */}
+                  <div className="flex text-sm flex-row gap-x-4 items-center">
+                    {/* Instruments */}
+                    <div className="flex items-center gap-1 bg-sky-50 px-2.5 rounded-md py-0.5">
+                      <TrendingUp className="w-4 h-4 text-purple-600" />
+                      <span className="text-gray-600 font-mono">Instruments:</span>
+                      <span className="font-semibold text-gray-900 font-mono">
+                        {uniqueInstruments.length + upstoxUniqueInstruments.length}
+                      </span>
+                    </div>
 
-                {/* Connection */}
-                <div className="flex items-center gap-1 bg-green-50 px-2.5 rounded-md py-0.5">
-                  <Wifi className="w-4 h-4 text-blue-600" />
-                  <span className="text-gray-600 font-mono">Connection:</span>
-                  <div className="flex items-center gap-x-1.5">
-                    <span className="text-xs text-gray-700 font-mono">Kite:</span>
-                    <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`} />
-                    <span className="text-xs text-gray-700 font-mono">Upstox:</span>
-                    <div className={`w-2 h-2 rounded-full ${upstoxIsConnected ? "bg-green-500" : "bg-red-500"}`} />
+                    {/* Connection */}
+                    <div className="flex items-center gap-1 bg-green-50 px-2.5 rounded-md py-0.5">
+                      <Wifi className="w-4 h-4 text-blue-600" />
+                      <span className="text-gray-600 font-mono">Connection:</span>
+                      <div className="flex items-center gap-x-1.5">
+                        <span className="text-xs text-gray-700 font-mono">Kite:</span>
+                        <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`} />
+                        <span className="text-xs text-gray-700 font-mono">Upstox:</span>
+                        <div className={`w-2 h-2 rounded-full ${upstoxIsConnected ? "bg-green-500" : "bg-red-500"}`} />
+                      </div>
+                    </div>
+
+                    {/* Alerts */}
+                    <div className="flex items-center gap-1 bg-slate-100 px-2.5 rounded-md py-0.5">
+                      <Bell className="w-4 h-4 text-green-600" />
+                      <span className="text-gray-600 font-mono">Alerts:</span>
+                      <span className="font-semibold text-gray-900 font-mono">{totalEnabledAlerts}</span>
+                    </div>
+
+                    {/* Alerting */}
+                    <div className="flex items-center gap-1 bg-indigo-50 px-2.5 rounded-md py-0.5">
+                      <Activity className="w-4 h-4 text-yellow-600" />
+                      <span className="text-gray-600 font-mono">Alerting:</span>
+                      <span className="font-semibold text-gray-900 font-mono">
+                        {inactiveSymbols.size + upstoxInactiveSymbols.size}
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                {/* Alerts */}
-                <div className="flex items-center gap-1 bg-slate-100 px-2.5 rounded-md py-0.5">
-                  <Bell className="w-4 h-4 text-green-600" />
-                  <span className="text-gray-600 font-mono">Alerts:</span>
-                  <span className="font-semibold text-gray-900 font-mono">{totalEnabledAlerts}</span>
-                </div>
+                  {/* Time */}
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm font-mono text-gray-900">
+                      {new Date().toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour12: false })}
+                    </span>
+                    <div
+                      className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500 animate-pulse" : "bg-gray-400"}`}
+                    />
+                  </div>
+                </>
+              )}
 
-                {/* Alerting */}
-                <div className="flex items-center gap-1 bg-indigo-50 px-2.5 rounded-md py-0.5">
-                  <Activity className="w-4 h-4 text-yellow-600" />
-                  <span className="text-gray-600 font-mono">Alerting:</span>
-                  <span className="font-semibold text-gray-900 font-mono">
-                    {inactiveSymbols.size + upstoxInactiveSymbols.size}
-                  </span>
-                </div>
-              </div>
-
-              {/* Time */}
+              {/* Auth Section */}
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-mono text-gray-900">
-                  {new Date().toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour12: false })}
-                </span>
-                <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
+                {user ? (
+                  <UserMenu />
+                ) : (
+                  <Button
+                    onClick={() => {
+                      setAuthMode("signin")
+                      setIsAuthModalOpen(true)
+                    }}
+                    size="sm"
+                  >
+                    <LogIn className="w-4 h-4 mr-2" />
+                    Sign In
+                  </Button>
+                )}
               </div>
             </div>
 
             {/* Mobile Menu Button */}
             <div className="flex items-center gap-2 lg:hidden">
+              {/* Auth for Mobile */}
+              {user ? (
+                <UserMenu />
+              ) : (
+                <Button
+                  onClick={() => {
+                    setAuthMode("signin")
+                    setIsAuthModalOpen(true)
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <LogIn className="w-4 h-4" />
+                </Button>
+              )}
+
               {/* Connection Status Indicators for Mobile */}
-              <div className="flex items-center gap-1">
-                <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`} />
-                <div className={`w-2 h-2 rounded-full ${upstoxIsConnected ? "bg-green-500" : "bg-red-500"}`} />
-              </div>
-              <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                aria-expanded="false"
-              >
-                <span className="sr-only">Open main menu</span>
-                {isMobileMenuOpen ? (
-                  <X className="block h-6 w-6" aria-hidden="true" />
-                ) : (
-                  <Menu className="block h-6 w-6" aria-hidden="true" />
-                )}
-              </button>
+              {user && (
+                <div className="flex items-center gap-1">
+                  <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`} />
+                  <div className={`w-2 h-2 rounded-full ${upstoxIsConnected ? "bg-green-500" : "bg-red-500"}`} />
+                </div>
+              )}
+
+              {user && (
+                <button
+                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                  className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                  aria-expanded="false"
+                >
+                  <span className="sr-only">Open main menu</span>
+                  {isMobileMenuOpen ? (
+                    <X className="block h-6 w-6" aria-hidden="true" />
+                  ) : (
+                    <Menu className="block h-6 w-6" aria-hidden="true" />
+                  )}
+                </button>
+              )}
             </div>
           </div>
 
           {/* Mobile Menu Panel */}
-          {isMobileMenuOpen && (
+          {isMobileMenuOpen && user && (
             <div className="lg:hidden">
               <div className="px-2 pt-2 pb-3 space-y-1 bg-white/90 backdrop-blur-sm rounded-lg mt-2 border border-gray-200/50 shadow-lg">
                 {/* Mobile Metrics */}
@@ -271,169 +334,225 @@ export default function MarketDashboard() {
 
       {/* Main Dashboard */}
       <div className="space-y-6 pt-10">
-        {/* Dashboard Title and Time */}
-        <div className="flex items-center justify-between">
-          <div></div>
-        </div>
-
-        {/* Connection Status Debug */}
-        {(!isConnected || !upstoxIsConnected) && (
-          <Card className="bg-yellow-50 border-yellow-200">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Wifi className="w-5 h-5 text-yellow-600" />
-                <h3 className="font-medium text-yellow-800">Connection Status</h3>
+        {!user ? (
+          // Landing page for unauthenticated users
+          <div className="min-h-[80vh] flex items-center justify-center">
+            <div className="text-center max-w-2xl mx-auto px-4">
+              <div className="w-16 h-16 rounded-full bg-[rgba(243,61,44,1)] flex items-center justify-center mx-auto mb-6">
+                <Activity className="w-8 h-8 text-white" />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="font-medium">Kite Feed:</p>
-                  <p className={`${isConnected ? "text-green-600" : "text-red-600"}`}>
-                    {isConnected ? "✅" : "❌"} {isConnected ? "Connected" : "Disconnected"} ({connectionStatus})
-                  </p>
-                  <p className="text-gray-600">Endpoint: https://ticks.rvinod.com/ticks</p>
+              <h1 className="text-4xl font-bold text-gray-900 mb-4">Market Ticks Monitor</h1>
+              <p className="text-xl text-gray-600 mb-8">
+                Real-time market data monitoring dashboard with advanced alerting system
+              </p>
+              <div className="space-y-4">
+                <Button
+                  onClick={() => {
+                    setAuthMode("signin")
+                    setIsAuthModalOpen(true)
+                  }}
+                  size="lg"
+                  className="px-8"
+                >
+                  <LogIn className="w-5 h-5 mr-2" />
+                  Get Started
+                </Button>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
+                  <div className="text-center">
+                    <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center mx-auto mb-3">
+                      <TrendingUp className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Real-time Data</h3>
+                    <p className="text-gray-600 text-sm">Monitor live market data from multiple sources</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center mx-auto mb-3">
+                      <Bell className="w-6 h-6 text-green-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Smart Alerts</h3>
+                    <p className="text-gray-600 text-sm">Get notified when data stops flowing</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center mx-auto mb-3">
+                      <GitCompare className="w-6 h-6 text-purple-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Compare Feeds</h3>
+                    <p className="text-gray-600 text-sm">Compare data across different providers</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium">Upstox Feed:</p>
-                  <p className={`${upstoxIsConnected ? "text-green-600" : "text-red-600"}`}>
-                    {upstoxIsConnected ? "✅" : "❌"} {upstoxIsConnected ? "Connected" : "Disconnected"} (
-                    {upstoxConnectionStatus})
-                  </p>
-                  <p className="text-gray-600">Endpoint: https://ticks.rvinod.com/upstox</p>
-                  {upstoxSystemAlerts.length > 0 && (
-                    <p className="text-xs text-red-600 mt-1">Latest: {upstoxSystemAlerts[0]?.message}</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Dashboard Title and Time */}
+            <div className="flex items-center justify-between">
+              <div></div>
+            </div>
+
+            {/* Connection Status Debug */}
+            {(!isConnected || !upstoxIsConnected) && (
+              <Card className="bg-yellow-50 border-yellow-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Wifi className="w-5 h-5 text-yellow-600" />
+                    <h3 className="font-medium text-yellow-800">Connection Status</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="font-medium">Kite Feed:</p>
+                      <p className={`${isConnected ? "text-green-600" : "text-red-600"}`}>
+                        {isConnected ? "✅" : "❌"} {isConnected ? "Connected" : "Disconnected"} ({connectionStatus})
+                      </p>
+                      <p className="text-gray-600">Endpoint: https://ticks.rvinod.com/ticks</p>
+                    </div>
+                    <div>
+                      <p className="font-medium">Upstox Feed:</p>
+                      <p className={`${upstoxIsConnected ? "text-green-600" : "text-red-600"}`}>
+                        {upstoxIsConnected ? "✅" : "❌"} {upstoxIsConnected ? "Connected" : "Disconnected"} (
+                        {upstoxConnectionStatus})
+                      </p>
+                      <p className="text-gray-600">Endpoint: https://ticks.rvinod.com/upstox</p>
+                      {upstoxSystemAlerts.length > 0 && (
+                        <p className="text-xs text-red-600 mt-1">Latest: {upstoxSystemAlerts[0]?.message}</p>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Tabs */}
+            <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
+              <TabsList className="bg-white border">
+                <TabsTrigger value="kite" className="flex items-center gap-2">
+                  <ActivityIcon className="w-4 h-4" />
+                  Kite
+                  {uniqueInstruments.length > 0 && (
+                    <span className="ml-2 flex items-center justify-center rounded-full text-xs font-medium w-5 h-5 bg-emerald-100 text-green-700">
+                      {uniqueInstruments.length}
+                    </span>
                   )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </TabsTrigger>
+                <TabsTrigger value="upstox" className="flex items-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  Upstox
+                  {upstoxUniqueInstruments.length > 0 && (
+                    <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-xs font-medium text-blue-600">
+                      {upstoxUniqueInstruments.length}
+                    </span>
+                  )}
+                  {!upstoxIsConnected && (
+                    <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-medium text-red-600">
+                      !
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="compare" className="flex items-center gap-2">
+                  <GitCompare className="w-4 h-4" />
+                  Compare
+                  <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-purple-100 text-xs font-medium text-purple-600">
+                    6
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger value="alert-settings" className="flex items-center gap-2">
+                  <Sliders className="w-4 h-4" />
+                  Alert Settings
+                  {enabledAlertsCount > 0 && (
+                    <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-xs font-medium text-green-600">
+                      {enabledAlertsCount}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="inactivity-log" className="flex items-center gap-2">
+                  <History className="w-4 h-4" />
+                  Alert Log
+                  {inactivityAlerts.length > 0 && (
+                    <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-medium text-red-600">
+                      {inactivityAlerts.length}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="debug" className="flex items-center gap-2">
+                  <Settings className="w-4 h-4" />
+                  Debug
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="kite">
+                <MarketDataGrid
+                  ticks={ticks || []}
+                  inactiveSymbols={inactiveSymbols}
+                  alertConfigurations={configurations}
+                  onConfigurationChange={updateConfiguration}
+                />
+              </TabsContent>
+
+              <TabsContent value="upstox">
+                <UpstoxMarketDataGrid
+                  ticks={upstoxTicks || []}
+                  inactiveSymbols={new Set(Array.from(upstoxInactiveSymbols).map(String))}
+                  alertConfigurations={
+                    new Map(Array.from(upstoxConfigurations.entries()).map(([k, v]) => [String(k), v]))
+                  }
+                  onConfigurationChange={(token, config) =>
+                    upstoxUpdateConfiguration(Number.parseInt(token.replace(/[^0-9]/g, "") || "0") || 0, config)
+                  }
+                />
+              </TabsContent>
+
+              <TabsContent value="compare">
+                <ComparisonView
+                  kiteTicks={ticks || []}
+                  upstoxTicks={upstoxTicks || []}
+                  kiteConnected={isConnected}
+                  upstoxConnected={upstoxIsConnected}
+                />
+              </TabsContent>
+
+              <TabsContent value="alert-settings">
+                <AlertSettingsTab
+                  ticks={ticks || []}
+                  alertConfigurations={configurations}
+                  onConfigurationChange={updateConfiguration}
+                  inactiveSymbols={inactiveSymbols}
+                />
+              </TabsContent>
+
+              <TabsContent value="inactivity-log">
+                <InactivityAlertsLog
+                  alerts={[...inactivityAlerts, ...upstoxInactivityAlerts]}
+                  onClearAlerts={() => {
+                    clearAllAlerts()
+                    upstoxClearAllAlerts()
+                  }}
+                />
+              </TabsContent>
+
+              <TabsContent value="debug">
+                <DebugDashboard
+                  ticks={ticks || []}
+                  isConnected={isConnected}
+                  isFrozen={isFrozen}
+                  lastTickTime={lastTickTime}
+                  averageDelay={averageDelay}
+                  totalTicks={totalTicks}
+                  freezingIncidents={freezingIncidents}
+                  alerts={systemAlerts}
+                  connectionStatus={connectionStatus}
+                  clearAlerts={clearAlerts}
+                  rawMessages={rawMessages}
+                  debugInfo={debugInfo}
+                  addTestTick={addTestTick}
+                />
+              </TabsContent>
+            </Tabs>
+          </>
         )}
-
-        {/* Tabs */}
-        <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
-          <TabsList className="bg-white border">
-            <TabsTrigger value="kite" className="flex items-center gap-2">
-              <ActivityIcon className="w-4 h-4" />
-              Kite
-              {uniqueInstruments.length > 0 && (
-                <span className="ml-2 flex items-center justify-center rounded-full text-xs font-medium w-5 h-5 bg-emerald-100 text-green-700">
-                  {uniqueInstruments.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="upstox" className="flex items-center gap-2">
-              <Activity className="w-4 h-4" />
-              Upstox
-              {upstoxUniqueInstruments.length > 0 && (
-                <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-xs font-medium text-blue-600">
-                  {upstoxUniqueInstruments.length}
-                </span>
-              )}
-              {!upstoxIsConnected && (
-                <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-medium text-red-600">
-                  !
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="compare" className="flex items-center gap-2">
-              <GitCompare className="w-4 h-4" />
-              Compare
-              <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-purple-100 text-xs font-medium text-purple-600">
-                6
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="alert-settings" className="flex items-center gap-2">
-              <Sliders className="w-4 h-4" />
-              Alert Settings
-              {enabledAlertsCount > 0 && (
-                <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-xs font-medium text-green-600">
-                  {enabledAlertsCount}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="inactivity-log" className="flex items-center gap-2">
-              <History className="w-4 h-4" />
-              Alert Log
-              {inactivityAlerts.length > 0 && (
-                <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-medium text-red-600">
-                  {inactivityAlerts.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="debug" className="flex items-center gap-2">
-              <Settings className="w-4 h-4" />
-              Debug
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="kite">
-            <MarketDataGrid
-              ticks={ticks}
-              inactiveSymbols={inactiveSymbols}
-              alertConfigurations={configurations}
-              onConfigurationChange={updateConfiguration}
-            />
-          </TabsContent>
-
-          <TabsContent value="upstox">
-            <UpstoxMarketDataGrid
-              ticks={upstoxTicks}
-              inactiveSymbols={new Set(Array.from(upstoxInactiveSymbols).map(String))} // Convert to string set
-              alertConfigurations={new Map(Array.from(upstoxConfigurations.entries()).map(([k, v]) => [String(k), v]))} // Convert to string keys
-              onConfigurationChange={(token, config) =>
-                upstoxUpdateConfiguration(Number.parseInt(token.replace(/[^0-9]/g, "")) || 0, config)
-              } // Convert back to number
-            />
-          </TabsContent>
-
-          <TabsContent value="compare">
-            <ComparisonView
-              kiteTicks={ticks}
-              upstoxTicks={upstoxTicks}
-              kiteConnected={isConnected}
-              upstoxConnected={upstoxIsConnected}
-            />
-          </TabsContent>
-
-          {/* NSE / MCX alert settings */}
-          <TabsContent value="alert-settings">
-            <AlertSettingsTab
-              ticks={ticks}
-              alertConfigurations={configurations}
-              onConfigurationChange={updateConfiguration}
-              inactiveSymbols={inactiveSymbols}
-            />
-          </TabsContent>
-
-          {/* Alert Log for BOTH feeds (merge arrays) */}
-          <TabsContent value="inactivity-log">
-            <InactivityAlertsLog
-              alerts={[...inactivityAlerts, ...upstoxInactivityAlerts]}
-              onClearAlerts={() => {
-                clearAllAlerts()
-                upstoxClearAllAlerts()
-              }}
-            />
-          </TabsContent>
-
-          <TabsContent value="debug">
-            <DebugDashboard
-              ticks={ticks}
-              isConnected={isConnected}
-              isFrozen={isFrozen}
-              lastTickTime={lastTickTime}
-              averageDelay={averageDelay}
-              totalTicks={totalTicks}
-              freezingIncidents={freezingIncidents}
-              alerts={systemAlerts}
-              connectionStatus={connectionStatus}
-              clearAlerts={clearAlerts}
-              rawMessages={rawMessages}
-              debugInfo={debugInfo}
-              addTestTick={addTestTick}
-            />
-          </TabsContent>
-        </Tabs>
       </div>
+
+      {/* Auth Modal */}
+      <AuthModal />
     </div>
   )
 }
